@@ -1,10 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, TensorDataset
 import torchvision
 import numpy as np
 import time
+
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 import matplotlib.pyplot as plt
 
@@ -236,34 +239,68 @@ def train_evaluate(model: nn.Module, device: torch.device, train_dataset: Datase
            
     return train_results, evaluation_results
 
+def plot_training_results(train_results, validation_results):
+    """Function to plot training results
 
-class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dims):
-        super(VariationalEncoder, self).__init__()
+    Args:
+        train_results (dict): Dictionary of training results
+        validation_results (dict): Dictionary of validation results
+    """
+    plt.plot(train_results['loss'], label='Training Loss')
+    plt.plot(train_results['l1'], label='Training L1 Loss')
+    plt.plot(train_results['l1_norm'], label='Training L1 Norm')
+    plt.plot(validation_results['loss'], label='Validation Loss')
+    plt.plot(validation_results['l1'], label='Validation L1 Loss')
+    plt.plot(validation_results['l1_norm'], label='Validation L1 Norm')
+    plt.legend()
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.show()
+    
+    
+class BasicNet(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(BasicNet,self).__init__()
         
-        self.conv1 = nn.Conv2d(1, 64 , 3, stride = 2)
-        self.conv2 = nn.Conv2d(64, 256, 3, stride = 2)
-        self.batch2 = nn.BatchNorm2d(256)
-        
-        self.conv3 = nn.Conv2d(256, 512, 3, stride = 2)
-        self.linear1 = nn.Linear(2*2*512, 1024)
-        self.muLinear = nn.Linear(1024, latent_dims)
-        self.sigmaLinear = nn.Linear(1024, latent_dims)
-
-        self.N = torch.distributions.Normal(0, 1)
-        self.kl = 0
+        self.linear1 = nn.Linear(input_size, hidden_size)
+        self.output = nn.Linear(hidden_size, output_size)
+        self.activation = nn.ReLU()
 
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.batch2(self.conv2(x)))
-        x = F.relu(self.conv3(x))
-        x = torch.flatten(x, start_dim=1)
-        x = F.relu(self.linear1(x))
-        mu = self.muLinear(x)
-        sigma = self.sigmaLinear(x)
-        z = mu + sigma*self.N.sample(mu.shape)
-        self.kl = (sigma**2 + mu**2 - torch.log(sigma) - 1/2).sum()
-        return z
+        x = self.linear1(x)
+        x = self.activation(x)
+        x = self.output(x)
+        return x
     
 if __name__ == '__main__':
-    model = VariationalEncoder(latent_dims=2)
+    model = BasicNet(512, 2048, 4)
+    
+    modelSummary(model)
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}\n")
+        
+    training_data = torch.rand(2**10, 512)
+    training_target = torch.rand(2**10, 4)
+    
+    validation_data = torch.rand(2048, 512)
+    validation_target = torch.rand(2048, 4)
+    
+    train_dataset = TensorDataset(training_data, training_target)
+    validation_dataset = TensorDataset(validation_data, validation_target)
+    
+    training_params = {
+        'num_epochs': 50,
+        'batch_size': 256,
+        'loss_function':F.mse_loss,
+        'optimizer': torch.optim.Adam(model.parameters(), lr=0.001),
+        'save_path': './model.pt'
+    }
+    
+    metrics = {
+        'l1': lambda output, target: torch.mean(torch.abs(output - target)),
+        'l1_norm': lambda output, target: torch.norm(output - target, 1),
+    }
+    
+    train_results, evaluation_results = train_evaluate(model, device, train_dataset, validation_dataset, training_params, metrics)
+    plot_training_results(train_results=train_results, validation_results=evaluation_results)
