@@ -273,25 +273,32 @@ class BasicNet(nn.Module):
         return x
     
 if __name__ == '__main__':
-    model = BasicNet(512, 2048, 4)
+    input_size = 512
+    hidden_dimension = 5096
+    output_size = 16
+    
+    model = BasicNet(input_size, hidden_dimension, output_size)
     
     modelSummary(model)
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}\n")
-        
-    training_data = torch.rand(2**10, 512)
-    training_target = torch.rand(2**10, 4)
     
-    validation_data = torch.rand(2048, 512)
-    validation_target = torch.rand(2048, 4)
+    training_data_size = 2**12
+    validation_data_size = int(training_data_size * 0.2)
+    
+    training_data = torch.rand(training_data_size, input_size)
+    training_target = torch.rand(training_data_size, output_size)
+    
+    validation_data = torch.rand(validation_data_size, input_size)
+    validation_target = torch.rand(validation_data_size, output_size)
     
     train_dataset = TensorDataset(training_data, training_target)
     validation_dataset = TensorDataset(validation_data, validation_target)
     
     training_params = {
         'num_epochs': 50,
-        'batch_size': 256,
+        'batch_size': 512,
         'loss_function':F.mse_loss,
         'optimizer': torch.optim.Adam(model.parameters(), lr=0.001),
         'save_path': './model.pt'
