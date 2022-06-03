@@ -1,2 +1,2 @@
 # PyTorch-Utility
-Utility for PyTorch
+Template Utility packages for training of pytorch models
